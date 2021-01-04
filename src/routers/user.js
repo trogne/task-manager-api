@@ -6,7 +6,6 @@ const auth = require('../middleware/auth')
 const { sendWelcomeEmail, sendCancelationEmail } = require('../emails/account')
 const router = new express.Router()
 
-
 router.post('/users', async (req, res) => {
     const user = new User(req.body)
 
@@ -26,10 +25,8 @@ router.post('/users', async (req, res) => {
     }
 })
 
-
-
-// const cookieParser = require('cookie-parser');
-// router.use(cookieParser()) // npm i cookie-parser --save // router au lieu de app
+const cookieParser = require('cookie-parser')
+router.use(cookieParser()) // npm i cookie-parser --save // router au lieu de app
 // const session = require('express-session')
 // //// start the session
 // router.use(session({
@@ -49,9 +46,9 @@ router.get('/verify/:token', async (req, res) => {
     // res.send(`verified: <br>${req.params.token}<br><br>click <a href="/users/fiso?token=${req.params.token}">here</a> to view profile`) // GET /users/fiso?token=...
     // res.cookie('token', req.params.token) // with cookie-parser
     // req.session.token = req.params.token // wutg express-session
-    res.send(`verified: <br>${req.params.token}<br><br>click <a href="/users/fiso">here</a> to view profile`) // GET /users/fiso
+    // res.send(`verified: <br>${req.params.token}<br><br>click <a href="/users/fiso">here</a> to view profile`) // GET /users/fiso
+    res.send({ token: req.params.token }) // sending back to frontend
 })
-
 
 router.post('/users/login', async (req, res) => {
     try {
@@ -86,15 +83,14 @@ router.post('/users/logoutAll', auth, async (req, res) => {
     }
 })
 
-
 // MY ADD
 const jwt = require('jsonwebtoken')
 router.get('/users/fiso', async (req, res) => {
     try {
         // const token = req.query.token
-        // const token = req.cookies.token
+        const token = req.cookies.token
         // const token = req.session.token
-        const token = req.header('Authorization').replace('Bearer ', '')
+        // const token = req.header('Authorization').replace('Bearer ', '')
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
         const user = await User.findOne({ _id: decoded._id, 'tokens.token': token })
 
@@ -107,7 +103,7 @@ router.get('/users/fiso', async (req, res) => {
     } catch (e) {
         console.log(e.message, ' !!!')
         res.status(401).send({ error: 'Please authenticate.' })
-    }    
+    }
     res.send(req.user)
 })
 router.get('/users/me', auth, async (req, res) => {
@@ -124,7 +120,7 @@ router.patch('/users/me', auth, async (req, res) => {
     }
 
     try {
-        updates.forEach((update) => req.user[update] = req.body[update])
+        updates.forEach((update) => (req.user[update] = req.body[update]))
         await req.user.save()
         res.send(req.user)
     } catch (e) {
@@ -144,7 +140,7 @@ router.delete('/users/me', auth, async (req, res) => {
 
 const upload = multer({
     limits: {
-        fileSize: 1000000
+        fileSize: 1000000,
     },
     fileFilter(req, file, cb) {
         if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
@@ -152,17 +148,23 @@ const upload = multer({
         }
 
         cb(undefined, true)
-    }
+    },
 })
 
-router.post('/users/me/avatar', auth, upload.single('avatar'), async (req, res) => {
-    const buffer = await sharp(req.file.buffer).resize({ width: 250, height: 250 }).png().toBuffer()
-    req.user.avatar = buffer
-    await req.user.save()
-    res.send()
-}, (error, req, res, next) => {
-    res.status(400).send({ error: error.message })
-})
+router.post(
+    '/users/me/avatar',
+    auth,
+    upload.single('avatar'),
+    async (req, res) => {
+        const buffer = await sharp(req.file.buffer).resize({ width: 250, height: 250 }).png().toBuffer()
+        req.user.avatar = buffer
+        await req.user.save()
+        res.send()
+    },
+    (error, req, res, next) => {
+        res.status(400).send({ error: error.message })
+    }
+)
 
 router.delete('/users/me/avatar', auth, async (req, res) => {
     req.user.avatar = undefined
